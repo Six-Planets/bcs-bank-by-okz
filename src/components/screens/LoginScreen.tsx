@@ -20,6 +20,7 @@ import {
   getClientAuthConfig,
   launchGoogleOAuth,
   loginWithCredentials,
+  loginWithGoogleIdToken,
   registerAccount,
   resendSignupCode,
   sendPasswordReset,
@@ -27,6 +28,7 @@ import {
 } from '../../auth';
 import type { AuthServerSettings } from '../../lib/api';
 import { APP_VERSION_LABEL } from '../../lib/updater';
+import { canUseGooglePrompt, requestGoogleIdToken } from '../../lib/googleOneTap';
 import { MotionBackdrop } from '../common/MotionBackdrop';
 
 interface LoginScreenProps {
@@ -166,7 +168,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
       );
       return;
     }
-    // Uses direct Supabase top-level OAuth redirect (no fragile GIS iframe / no gsi/transform blank white page!)
+    // Website: Google's own prompt, which names this site rather than the Supabase project.
+    // Android APK, or when Google won't show the prompt: top-level Supabase OAuth redirect.
+    if (canUseGooglePrompt(cfg.googleClientId)) {
+      const outcome = await requestGoogleIdToken(cfg.googleClientId);
+      if (outcome.kind === 'cancelled') {
+        setGoogleBusy(false);
+        return;
+      }
+      if (outcome.kind === 'credential') {
+        const res = await loginWithGoogleIdToken(outcome.idToken, outcome.nonce);
+        setGoogleBusy(false);
+        if (res.ok) return onLoginSuccess(res.user);
+        setError(res.error);
+        return;
+      }
+    }
     launchGoogleOAuth();
     window.setTimeout(() => setGoogleBusy(false), 6000);
   };
