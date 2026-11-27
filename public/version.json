@@ -1,0 +1,10 @@
+{
+    "version":  "2.0.0",
+    "build":  1,
+    "builtAt":  "2026-11-27T06:59:08.7401016Z",
+    "native":  {
+                   "code":  1,
+                   "version":  "2.0.0",
+                   "apk":  "https://github.com/Six-Planets/bcs-bank-by-okz/releases/latest/download/BCS-Bank-by-OKZ.apk"
+               }
+}

@@ -1,14 +1,21 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Award,
   Check,
   Cloud,
   Compass,
   Crown,
   Database,
+  Download,
   Film,
   Flame,
   Globe2,
+  KeyRound,
   Layers,
+  Loader2,
+  LogOut,
+  RefreshCw,
+  Smartphone,
   Sparkles,
   Target,
   Trash2,
@@ -17,16 +24,27 @@ import {
   Upload,
   Wand2
 } from 'lucide-react';
+import type { AuthUser } from '../../auth';
 import {
-  computeLocalStats,
-  getCandidateProfile,
-  saveCandidateProfile
-} from '../../lib/localStore';
+  ApiError,
+  LeaderRow,
+  Stats,
+  changePassword,
+  getLeaderboard,
+  getProfile,
+  getStats,
+  isCloudAuthConfigured,
+  pendingAttempts,
+  updateProfile
+} from '../../lib/api';
 import {
-  CloudLeaderboardRow,
-  fetchSupabaseLeaderboard,
-  isSupabaseConfigured
-} from '../../lib/supabaseClient';
+  APP_VERSION_LABEL,
+  LATEST_APK_URL,
+  UpdateInfo,
+  applyUpdate,
+  checkForUpdate,
+  nativeCode
+} from '../../lib/updater';
 import { readMasteryMap } from '../../data/syllabus';
 import {
   BackdropExposure,
@@ -41,6 +59,28 @@ import {
 } from '../../backdrop';
 import { toggleTheme, useTheme } from '../../theme';
 
+function useLoad<T>(fn: () => Promise<T>) {
+  const [data, setData] = useState<T | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    fn()
+      .then((d) => alive && (setData(d), setError(null)))
+      .catch((e: ApiError) => alive && setError(e.message))
+      .finally(() => alive && setLoading(false));
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
+
+  return { data, error, loading, reload: useCallback(() => setTick((t) => t + 1), []) };
+}
+
 const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({
   className = 'section-card-tm',
   children
@@ -53,121 +93,120 @@ const fmt = (n: number | null | undefined, digits = 0) =>
 
 /* ---------------------------------------------------------------- PROGRESS */
 export const ProgressView: React.FC = () => {
-  const stats = useMemo(() => computeLocalStats(), []);
+  const { data, loading, error, reload } = useLoad<Stats>(getStats);
+  const queued = pendingAttempts();
   const mastery = useMemo(() => readMasteryMap(), []);
   const masteredCount = useMemo(
     () => Object.values(mastery).filter((v) => v === 1).length,
     [mastery]
   );
-  const attemptedQs = Object.keys(mastery).length;
-  const subjects = Object.entries(stats.subjects).sort((a, b) => b[1].total - a[1].total);
+  const subjects = data ? Object.entries(data.subjects).sort((a, b) => b[1].total - a[1].total) : [];
 
   return (
     <Card className="section-card-sm">
-      <div className="space-y-1">
-        <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-rounded font-bold text-xs">
-          <Target className="w-3.5 h-3.5" />
-          <span>{isSupabaseConfigured ? 'Cloud + Local Sync Active' : 'Local-First Analytics Engine'}</span>
-        </span>
-        <h1 className="text-2xl sm:text-3xl font-rounded font-bold theme-text-primary">
-          Your Learning Progress
-        </h1>
-      </div>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-        {[
-          { label: 'Mock Tests Taken', value: fmt(stats.attempts) },
-          { label: 'Mock Accuracy', value: stats.attempts ? `${fmt(stats.accuracy, 1)}%` : '—' },
-          {
-            label: 'Best Mock Score',
-            value: stats.best_score === null ? '—' : `${fmt(stats.best_score, 2)}/200`
-          },
-          { label: 'Topics Mastered', value: `${masteredCount} / ${attemptedQs || 0}` }
-        ].map((s) => (
-          <div key={s.label} className="p-4 sm:p-5 rounded-3xl theme-subcard text-center space-y-1">
-            <div className="text-xl sm:text-2xl font-rounded font-extrabold theme-text-primary">
-              {s.value}
-            </div>
-            <div className="text-xs font-rounded theme-text-secondary">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {subjects.length === 0 ? (
-        <div className="p-6 rounded-3xl theme-subcard text-center space-y-1.5">
-          <p className="font-rounded font-bold text-sm theme-text-primary">
-            Ready for your first full-length mock test!
-          </p>
-          <p className="font-rounded text-xs theme-text-secondary">
-            Complete a Mock Test or drill S-Tier topics inside Royal Topic Master to build your subject radar.
-          </p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="space-y-1">
+          <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-rounded font-bold text-xs">
+            <Target className="w-3.5 h-3.5" />
+            <span>{isCloudAuthConfigured() ? 'Cloud + Local Sync Active' : 'Local-First Analytics'}</span>
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-rounded font-bold theme-text-primary">
+            Your Learning Progress
+          </h1>
         </div>
-      ) : (
-        <div className="space-y-3">
-          <h2 className="font-rounded font-bold theme-text-primary">Performance by Subject</h2>
-          {subjects.map(([name, v]) => {
-            const pct = v.total ? Math.round((100 * v.correct) / v.total) : 0;
-            return (
-              <div key={name} className="p-4 rounded-2xl theme-subcard space-y-2">
-                <div className="flex items-center justify-between font-rounded text-sm">
-                  <span className="font-bold theme-text-primary">{name}</span>
-                  <span className="theme-text-secondary">
-                    {v.correct}/{v.total} · {pct}%
-                  </span>
+        <button
+          type="button"
+          onClick={reload}
+          aria-label="Refresh progress"
+          className="p-2.5 rounded-full theme-subcard cursor-pointer hover:scale-105 transition-transform"
+        >
+          <RefreshCw className={`w-4 h-4 theme-text-secondary ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      {queued > 0 && (
+        <p className="text-xs font-rounded theme-text-secondary">
+          {queued} mock result(s) queued offline — they will sync automatically when online.
+        </p>
+      )}
+
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-8 font-rounded font-bold text-sm theme-text-secondary">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading progress…
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 text-rose-700 dark:text-rose-300 font-rounded text-xs text-center">
+          {error}
+        </div>
+      )}
+
+      {data && (
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            {[
+              { label: 'Mock Tests', value: fmt(data.attempts) },
+              { label: 'Accuracy', value: data.attempts ? `${fmt(data.accuracy, 1)}%` : '—' },
+              {
+                label: 'Best Score',
+                value: data.best_score === null ? '—' : `${fmt(data.best_score, 2)}/200`
+              },
+              { label: 'Topics Mastered', value: fmt(masteredCount) }
+            ].map((s) => (
+              <div key={s.label} className="p-4 sm:p-5 rounded-3xl theme-subcard text-center space-y-1">
+                <div className="text-xl sm:text-2xl font-rounded font-extrabold theme-text-primary">
+                  {s.value}
                 </div>
-                <div className="h-2 rounded-full bg-slate-400/20 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-400"
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
+                <div className="text-xs font-rounded theme-text-secondary">{s.label}</div>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+
+          {subjects.length === 0 ? (
+            <div className="p-6 rounded-3xl theme-subcard text-center space-y-1.5">
+              <p className="font-rounded font-bold text-sm theme-text-primary">
+                Ready for your first full-length mock test!
+              </p>
+              <p className="font-rounded text-xs theme-text-secondary">
+                Finish a Mock Test or drill S-Tier topics inside Royal Topic Master to build your subject radar.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <h2 className="font-rounded font-bold theme-text-primary">Performance by Subject</h2>
+              {subjects.map(([name, v]) => {
+                const pct = v.total ? Math.round((100 * v.correct) / v.total) : 0;
+                return (
+                  <div key={name} className="p-4 rounded-2xl theme-subcard space-y-2">
+                    <div className="flex items-center justify-between font-rounded text-sm">
+                      <span className="font-bold theme-text-primary">{name}</span>
+                      <span className="theme-text-secondary">
+                        {v.correct}/{v.total} · {pct}%
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-400/20 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-400"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </Card>
   );
 };
 
 /* ------------------------------------------------------------- LEADERBOARD */
+const MEDAL = ['bg-amber-400 text-amber-950', 'bg-slate-200 text-slate-800', 'bg-orange-300 text-orange-950'];
+
 export const LeaderboardView: React.FC = () => {
-  const profile = useMemo(() => getCandidateProfile(), []);
-  const stats = useMemo(() => computeLocalStats(), []);
-  const mastered = useMemo(
-    () => Object.values(readMasteryMap()).filter((v) => v === 1).length,
-    []
-  );
-  const [cloudRows, setCloudRows] = useState<CloudLeaderboardRow[] | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    if (isSupabaseConfigured) {
-      void fetchSupabaseLeaderboard().then((rows) => {
-        if (alive && rows && rows.length > 0) setCloudRows(rows);
-      });
-    }
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const personalScore = Math.round((stats.best_score ?? 0) + mastered * 0.5);
-  const rows = cloudRows
-    ? cloudRows.map((r, i) => ({
-        name: r.display_name,
-        tag: r.client_id === profile.id ? 'You · Live Supabase Sync' : r.target_bcs,
-        score: Math.round((r.best_mock_score ?? 0) + (r.mastered_count ?? 0) * 0.5),
-        badge: i === 0 ? '👑' : i === 1 ? '🥇' : i === 2 ? '🥈' : '⭐',
-        isMe: r.client_id === profile.id
-      }))
-    : [
-        { name: profile.displayName, tag: 'You · BBBOKZ Scholar', score: personalScore, badge: '👑', isMe: true },
-        { name: 'Tanvir Rahman (46th Cadre)', tag: 'Benchmark Target', score: 158, badge: '🥇', isMe: false },
-        { name: 'Nusrat Jahan (Admin)', tag: 'Benchmark Target', score: 146, badge: '🥈', isMe: false },
-        { name: 'Mahmudul Hasan (Foreign)', tag: 'Benchmark Target', score: 139, badge: '🥉', isMe: false },
-        { name: 'Farhana Akter (Police)', tag: 'Benchmark Target', score: 128, badge: '⭐', isMe: false }
-      ].sort((a, b) => b.score - a.score);
+  const { data, loading, error, reload } = useLoad<LeaderRow[]>(() => getLeaderboard(50));
 
   return (
     <Card className="section-card-up">
@@ -178,44 +217,60 @@ export const LeaderboardView: React.FC = () => {
           </span>
           <div>
             <h1 className="text-2xl sm:text-3xl font-rounded font-bold theme-text-primary">
-              Cadre Benchmark Board
+              Cadre Leaderboard
             </h1>
             <p className="text-xs font-rounded theme-text-secondary">
-              {cloudRows
-                ? 'Live global rankings synced via Supabase'
-                : 'Track your mock scores & Topic Master readiness against BCS Cadre benchmarks'}
+              XP = 10 per correct answer + 20 per finished test
             </p>
           </div>
         </div>
-        {isSupabaseConfigured && (
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-rounded font-bold text-xs">
-            <Cloud className="w-3.5 h-3.5" />
-            <span>Supabase Live</span>
-          </span>
-        )}
+        <button
+          type="button"
+          onClick={reload}
+          aria-label="Refresh leaderboard"
+          className="p-2.5 rounded-full theme-subcard cursor-pointer hover:scale-105 transition-transform"
+        >
+          <RefreshCw className={`w-4 h-4 theme-text-secondary ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
+      {loading && (
+        <div className="flex items-center justify-center gap-2 py-8 font-rounded font-bold text-sm theme-text-secondary">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading rankings…
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 rounded-2xl bg-rose-500/15 text-rose-700 dark:text-rose-300 font-rounded text-xs text-center">
+          {error}
+        </div>
+      )}
+
       <div className="space-y-2.5">
-        {rows.map((r, i) => (
+        {data?.map((row) => (
           <div
-            key={`${r.name}-${i}`}
-            className={`p-4 rounded-2xl theme-subcard flex items-center justify-between gap-3 ${
-              r.isMe ? 'border-amber-400/60 bg-amber-500/10' : ''
+            key={`${row.rank}-${row.display_name}`}
+            className={`p-4 rounded-2xl flex items-center justify-between gap-3 ${
+              row.is_me
+                ? 'bg-amber-500/15 border-2 border-amber-400/70'
+                : 'theme-subcard'
             }`}
           >
             <div className="flex items-center gap-3 min-w-0">
-              <span className="w-8 h-8 rounded-xl bg-amber-500/15 font-rounded font-extrabold text-sm flex items-center justify-center shrink-0">
-                #{i + 1}
+              <span
+                className={`w-9 h-9 shrink-0 rounded-xl flex items-center justify-center font-rounded font-extrabold text-xs ${
+                  MEDAL[row.rank - 1] ?? 'bg-amber-500/15 theme-text-primary'
+                }`}
+              >
+                #{row.rank}
               </span>
-              <div className="min-w-0">
-                <div className="font-rounded font-bold text-sm sm:text-base theme-text-primary truncate">
-                  {r.badge} {r.name}
-                </div>
-                <div className="text-[11px] font-rounded theme-text-muted">{r.tag}</div>
-              </div>
+              <span className="font-bangla font-bold text-sm sm:text-base theme-text-primary truncate">
+                {row.display_name}
+                {row.is_me ? ' (You)' : ''}
+              </span>
             </div>
             <span className="px-3 py-1 rounded-full bg-amber-500/15 text-amber-800 dark:text-amber-200 font-rounded font-extrabold text-xs shrink-0">
-              {r.score} pts
+              {fmt(row.xp)} XP
             </span>
           </div>
         ))}
@@ -225,73 +280,115 @@ export const LeaderboardView: React.FC = () => {
 };
 
 /* ----------------------------------------------------------------- PROFILE */
-export const ProfileView: React.FC = () => {
-  const [profile, setProfile] = useState(() => getCandidateProfile());
-  const [name, setName] = useState(profile.displayName);
-  const [targetBcs, setTargetBcs] = useState(profile.targetBcs);
-  const [bio, setBio] = useState(profile.bio);
+export const ProfileView: React.FC<{ currentUser?: AuthUser | null; onLogout?: () => void }> = ({
+  currentUser,
+  onLogout
+}) => {
+  const { data } = useLoad<Stats>(getStats);
+  const [name, setName] = useState(currentUser?.displayName || 'Obaidul Kader Zihad');
+  const [targetBcs, setTargetBcs] = useState('51st BCS Cadre');
   const [saved, setSaved] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    void getProfile()
+      .then((p) => {
+        if (!p) return;
+        if (p.display_name) setName(p.display_name);
+        if (p.target_bcs) setTargetBcs(p.target_bcs);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const badge = !data
+    ? 'Royal Scholar'
+    : data.streak_days >= 7
+    ? 'Consistent Cadre Scholar'
+    : data.attempts >= 10
+    ? 'Dedicated Candidate'
+    : data.attempts >= 1
+    ? 'Rising Aspirant'
+    : 'New BCS Scholar';
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    const updated = saveCandidateProfile({
-      displayName: name.trim() || 'Obaidul Kader Zihad',
-      targetBcs: targetBcs.trim() || '51st BCS Cadre',
-      bio: bio.trim()
-    });
-    setProfile(updated);
+    await updateProfile({
+      display_name: name.trim().slice(0, 60) || 'BCS Scholar',
+      target_bcs: targetBcs.trim().slice(0, 60) || '51st BCS Cadre'
+    }).catch(() => undefined);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 2000);
   };
 
   return (
     <Card className="section-card-branding">
-      <div className="flex items-center gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 via-orange-500 to-violet-600 text-white flex items-center justify-center shadow-lg shrink-0">
-          <Crown className="w-8 h-8" />
+      <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-violet-600 text-white flex items-center justify-center font-rounded font-extrabold text-2xl shadow-lg shrink-0 uppercase">
+          {(name || currentUser?.username || 'OK').slice(0, 2)}
         </div>
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-rounded font-bold theme-text-primary">
-            {profile.displayName}
+        <div className="flex-1 min-w-0 space-y-1">
+          <h1 className="text-2xl sm:text-3xl font-rounded font-bold theme-text-primary truncate">
+            {name}
           </h1>
-          <p className="text-xs sm:text-sm font-rounded text-amber-700 dark:text-amber-300 font-bold">
-            {profile.targetBcs} • BCS Bank by OKZ
+          <p className="text-xs sm:text-sm font-rounded theme-text-secondary truncate">
+            {currentUser?.isGuest ? 'Guest Scholar • Local Mode' : currentUser?.email}
           </p>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/18 text-amber-800 dark:text-amber-200 font-rounded font-bold text-xs">
+            <Award className="w-3.5 h-3.5 text-amber-500" />
+            <span>{badge}</span>
+          </div>
         </div>
+        {onLogout && (
+          <button
+            type="button"
+            onClick={onLogout}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-rose-500/15 border border-rose-400/40 text-rose-700 dark:text-rose-300 font-rounded font-bold text-xs hover:bg-rose-500/25 transition-colors cursor-pointer shrink-0"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sign Out</span>
+          </button>
+        )}
       </div>
 
-      <form onSubmit={handleSave} className="space-y-3.5">
-        <div className="space-y-1">
-          <label className="block text-xs font-rounded font-bold theme-text-secondary">
-            Display Name
-          </label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-2xl bg-white/80 dark:bg-slate-900/75 border border-slate-300/60 dark:border-slate-700/70 font-rounded text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-400"
-          />
+      {data && (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { icon: <Trophy className="w-4 h-4 text-amber-500" />, label: 'XP', value: fmt(data.xp) },
+            { icon: <Target className="w-4 h-4 text-indigo-500" />, label: 'Tests', value: fmt(data.attempts) },
+            { icon: <Flame className="w-4 h-4 text-orange-500" />, label: 'Streak', value: `${data.streak_days}d` }
+          ].map((s) => (
+            <div key={s.label} className="p-4 rounded-3xl theme-subcard text-center space-y-1">
+              <div className="flex justify-center">{s.icon}</div>
+              <div className="text-xl font-rounded font-bold theme-text-primary">{s.value}</div>
+              <div className="text-xs font-rounded theme-text-secondary">{s.label}</div>
+            </div>
+          ))}
         </div>
+      )}
 
-        <div className="space-y-1">
-          <label className="block text-xs font-rounded font-bold theme-text-secondary">
-            Target BCS Cadre
-          </label>
-          <input
-            value={targetBcs}
-            onChange={(e) => setTargetBcs(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-2xl bg-white/80 dark:bg-slate-900/75 border border-slate-300/60 dark:border-slate-700/70 font-rounded text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-400"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="block text-xs font-rounded font-bold theme-text-secondary">
-            Study Motto
-          </label>
-          <input
-            value={bio}
-            onChange={(e) => setBio(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-2xl bg-white/80 dark:bg-slate-900/75 border border-slate-300/60 dark:border-slate-700/70 font-rounded text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-400"
-          />
+      <form onSubmit={handleSave} className="space-y-3 pt-2 border-t border-slate-300/30 dark:border-white/10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="block text-xs font-rounded font-bold theme-text-secondary">
+              Display Name (Leaderboard)
+            </label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              maxLength={60}
+              className="w-full px-4 py-2.5 rounded-2xl bg-white/80 dark:bg-slate-900/75 border border-slate-300/60 dark:border-slate-700/70 font-rounded text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="block text-xs font-rounded font-bold theme-text-secondary">
+              Target BCS Cadre
+            </label>
+            <input
+              value={targetBcs}
+              onChange={(e) => setTargetBcs(e.target.value)}
+              maxLength={60}
+              className="w-full px-4 py-2.5 rounded-2xl bg-white/80 dark:bg-slate-900/75 border border-slate-300/60 dark:border-slate-700/70 font-rounded text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+          </div>
         </div>
 
         <button
@@ -307,13 +404,19 @@ export const ProfileView: React.FC = () => {
 };
 
 /* ---------------------------------------------------------------- SETTINGS */
-export const SettingsView: React.FC = () => {
+export const SettingsView: React.FC<{ currentUser?: AuthUser | null }> = ({ currentUser }) => {
   const theme = useTheme();
   const backdrop = useBackdrop();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [urlInput, setUrlInput] = useState(
     backdrop.customUrl && !backdrop.customUrl.startsWith('blob:') ? backdrop.customUrl : ''
   );
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState<'pw' | 'update' | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [updateFound, setUpdateFound] = useState<UpdateInfo | null>(null);
+
+  const apkBuild = nativeCode();
 
   const scenes: { id: BackdropScene; title: string; desc: string; icon: React.ReactNode }[] = [
     {
@@ -364,22 +467,50 @@ export const SettingsView: React.FC = () => {
     setCustomBackdropMedia(clean, isImg ? 'image' : 'video');
   };
 
+  const handlePasswordChange = async () => {
+    if (pw.length < 6) return setMsg({ ok: false, text: 'Password must be at least 6 characters.' });
+    setBusy('pw');
+    setMsg(null);
+    try {
+      await changePassword(pw);
+      setPw('');
+      setMsg({ ok: true, text: 'Password updated successfully.' });
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCheckUpdate = async () => {
+    setBusy('update');
+    setMsg(null);
+    const found = await checkForUpdate();
+    setBusy(null);
+    if (found) {
+      setUpdateFound(found);
+      setMsg({
+        ok: true,
+        text: `Update v${found.version} (Build ${found.build}) is ready! Tap Update to install.`
+      });
+    } else {
+      setMsg({ ok: true, text: `You are on the latest release (${APP_VERSION_LABEL}).` });
+    }
+  };
+
   return (
     <Card className="section-card-tm">
       <div className="space-y-1">
         <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-800 dark:text-amber-200 font-royal font-bold text-[10px] tracking-wider uppercase">
           <Wand2 className="w-3.5 h-3.5" />
-          <span>3D Sanctuary &amp; Motion Studio</span>
+          <span>Settings &amp; 3D Motion Studio</span>
         </span>
         <h1 className="text-2xl sm:text-3xl font-rounded font-bold theme-text-primary">
-          World Scenery, 3D Parallax &amp; Cloud Status
+          Appearance, Account &amp; App Updates
         </h1>
-        <p className="text-xs sm:text-sm font-rounded theme-text-secondary">
-          Switch living 3D sanctuary worlds, tune anti-clash exposure, or plug in your own infinite 4K loop video.
-        </p>
       </div>
 
-      {/* Theme + Motion + 3D Parallax Controls */}
+      {/* Theme + Motion + 3D Parallax */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <button
           type="button"
@@ -477,7 +608,7 @@ export const SettingsView: React.FC = () => {
             [
               { id: 'vivid', label: 'Vivid World', sub: 'Rich scenery' },
               { id: 'balanced', label: 'Balanced', sub: 'Soft center veil' },
-              { id: 'stealth', label: 'Deep Focus', sub: 'Max reading contrast' }
+              { id: 'stealth', label: 'Deep Focus', sub: 'Max contrast' }
             ] as { id: BackdropExposure; label: string; sub: string }[]
           ).map((opt) => (
             <button
@@ -509,10 +640,6 @@ export const SettingsView: React.FC = () => {
           <Flame className="w-4 h-4 text-amber-500" />
           <span>Load Your Own 4K Infinite Video / GIF Wallpaper</span>
         </div>
-        <p className="text-xs font-rounded theme-text-secondary">
-          Upload any 4K <code>.mp4</code>, <code>.webm</code>, or <code>.gif</code> to preview live, or drop it in <code>public/bg/motion-bg.mp4</code> and apply <code>./bg/motion-bg.mp4</code>.
-        </p>
-
         <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileInputRef}
@@ -562,31 +689,124 @@ export const SettingsView: React.FC = () => {
         </form>
       </div>
 
-      {/* Supabase Cloud Sync Readiness Status */}
-      <div className="p-4 rounded-2xl theme-subcard flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Database className="w-5 h-5 text-emerald-500 shrink-0" />
-          <div>
-            <div className="font-rounded font-bold text-sm theme-text-primary">
-              Supabase Cloud Database Sync
-            </div>
-            <div className="text-xs font-rounded theme-text-muted">
-              {isSupabaseConfigured
-                ? 'Connected via VITE_SUPABASE_URL — syncing profiles & mock scores automatically.'
-                : 'Running in Local-First mode. Add VITE_SUPABASE_URL & VITE_SUPABASE_ANON_KEY on Vercel to activate free cloud sync.'}
-            </div>
+      {/* Password Change (when signed in with cloud account) */}
+      {currentUser && !currentUser.isGuest && (
+        <div className="p-4 rounded-2xl theme-subcard space-y-2.5">
+          <label htmlFor="set-pw" className="font-rounded font-bold text-sm theme-text-primary flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-amber-500" />
+            <span>Change Account Password</span>
+          </label>
+          <div className="flex gap-2">
+            <input
+              id="set-pw"
+              type="password"
+              autoComplete="new-password"
+              placeholder="New password (6+ characters)"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              className="flex-1 min-w-0 px-3.5 py-2 rounded-xl bg-white/80 dark:bg-slate-900/75 border border-slate-300/60 dark:border-slate-700/70 font-rounded text-xs theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void handlePasswordChange()}
+              className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-rounded font-bold text-xs cursor-pointer disabled:opacity-60"
+            >
+              {busy === 'pw' ? 'Saving…' : 'Update'}
+            </button>
           </div>
         </div>
-        <span
-          className={`shrink-0 px-3 py-1 rounded-full font-rounded font-bold text-xs ${
-            isSupabaseConfigured
-              ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
-              : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+      )}
+
+      {/* App Version, Build Number, In-App Self-Updater & Android APK Download */}
+      <div className="p-4 sm:p-5 rounded-2xl theme-subcard border border-amber-400/35 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-violet-600 text-white flex items-center justify-center shrink-0">
+              <Smartphone className="w-5 h-5" />
+            </span>
+            <div>
+              <p className="font-rounded font-bold text-sm theme-text-primary">
+                App Version &amp; Build
+              </p>
+              <p className="font-rounded text-xs theme-text-muted">
+                BCS Bank by OKZ {APP_VERSION_LABEL}
+                {apkBuild !== null ? ` · Android APK Shell #${apkBuild}` : ' · Web App'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {updateFound ? (
+              <button
+                type="button"
+                onClick={() => void applyUpdate(updateFound)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 text-white font-rounded font-bold text-xs cursor-pointer shadow-sm"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>
+                  {updateFound.kind === 'apk'
+                    ? `Install APK v${updateFound.version}`
+                    : `Update to v${updateFound.version}`}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void handleCheckUpdate()}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500/18 border border-amber-400/40 text-amber-800 dark:text-amber-200 font-rounded font-bold text-xs cursor-pointer hover:bg-amber-500/25 disabled:opacity-60"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${busy === 'update' ? 'animate-spin' : ''}`} />
+                <span>{busy === 'update' ? 'Checking…' : 'Check for Updates'}</span>
+              </button>
+            )}
+
+            <a
+              href={LATEST_APK_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 text-white font-rounded font-bold text-xs hover:bg-indigo-500 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Android APK</span>
+            </a>
+          </div>
+        </div>
+
+        {/* Cloud DB Status Footer inside Version Card */}
+        <div className="pt-2.5 border-t border-slate-300/25 dark:border-white/10 flex items-center justify-between gap-2 text-xs">
+          <span className="inline-flex items-center gap-1.5 font-rounded theme-text-muted">
+            {isCloudAuthConfigured() ? (
+              <Cloud className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <Database className="w-3.5 h-3.5 text-amber-500" />
+            )}
+            <span>
+              {isCloudAuthConfigured()
+                ? 'Supabase Cloud Sync Connected'
+                : 'Local-First Mode (Ready for Supabase Env Keys)'}
+            </span>
+          </span>
+          <span className="font-rounded font-bold text-[10px] theme-text-muted">
+            {APP_VERSION_LABEL}
+          </span>
+        </div>
+      </div>
+
+      {msg && (
+        <div
+          role="status"
+          className={`p-3 rounded-2xl font-rounded font-bold text-xs text-center flex items-center justify-center gap-2 ${
+            msg.ok
+              ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+              : 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
           }`}
         >
-          {isSupabaseConfigured ? 'Connected' : 'Ready'}
-        </span>
-      </div>
+          {msg.ok && <Check className="w-4 h-4 shrink-0" />}
+          <span>{msg.text}</span>
+        </div>
+      )}
     </Card>
   );
 };

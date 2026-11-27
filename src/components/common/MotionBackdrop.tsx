@@ -115,14 +115,17 @@ export const MotionBackdrop: React.FC = React.memo(() => {
 
     let width = window.innerWidth;
     let height = window.innerHeight;
-    let dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const isLiteDevice =
+      document.documentElement.getAttribute('data-perf') === 'lite' ||
+      window.matchMedia?.('(pointer: coarse)').matches;
+    let dpr = Math.min(window.devicePixelRatio || 1, isLiteDevice ? 1 : 1.5);
     let rafId = 0;
     let hidden = document.hidden;
 
     const resize = () => {
       width = window.innerWidth;
       height = window.innerHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      dpr = Math.min(window.devicePixelRatio || 1, isLiteDevice ? 1 : 1.5);
       canvas.width = Math.max(1, Math.floor(width * dpr));
       canvas.height = Math.max(1, Math.floor(height * dpr));
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -130,7 +133,7 @@ export const MotionBackdrop: React.FC = React.memo(() => {
     resize();
 
     // Seed fireflies & golden floating lanterns strictly along outer margins & lower water edge
-    const count = width < 640 ? 28 : 52;
+    const count = isLiteDevice ? 22 : width < 640 ? 28 : 48;
     const motes: LanternMote[] = Array.from({ length: count }, (_, i) => {
       const side = i % 3;
       const x =

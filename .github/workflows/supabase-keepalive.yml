@@ -1,0 +1,25 @@
+name: Keep Supabase Free-Tier DB Awake
+
+on:
+  schedule:
+    # Runs every 4 days so Supabase Free Tier never auto-pauses after 7 days of inactivity
+    - cron: '0 6 */4 * *'
+  workflow_dispatch:
+
+jobs:
+  ping-supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST Health Endpoint
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+            echo "Supabase secrets not configured yet — skipping ping cleanly."
+            exit 0
+          fi
+          curl -fsS "${SUPABASE_URL%/}/rest/v1/health_ping?select=*" \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
+          echo "Supabase Free Tier DB is awake!"

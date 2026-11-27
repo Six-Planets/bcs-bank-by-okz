@@ -10,6 +10,7 @@ import { QuestionBankView } from './QuestionBankView';
 import { TopicMasterView } from './TopicMasterView';
 import { navigate } from '../../router';
 import { setTopicMasterIntent, TopicMasterIntent } from '../../data/syllabus';
+import type { AuthUser } from '../../auth';
 
 export type ActiveView =
   | 'home'
@@ -26,9 +27,16 @@ export type ActiveView =
 interface DestinationViewProps {
   view: Exclude<ActiveView, 'home'>;
   onBackHome: () => void;
+  currentUser?: AuthUser | null;
+  onLogout?: () => void;
 }
 
-export const DestinationView: React.FC<DestinationViewProps> = ({ view, onBackHome }) => {
+export const DestinationView: React.FC<DestinationViewProps> = ({
+  view,
+  onBackHome,
+  currentUser,
+  onLogout
+}) => {
   // Dedicated 3D Crystal Mock Test Arena
   if (view === 'mock-test') {
     return <MockTestArena onBackHome={onBackHome} />;
@@ -210,8 +218,8 @@ export const DestinationView: React.FC<DestinationViewProps> = ({ view, onBackHo
       )}
 
       {view === 'progress' && <ProgressView />}
-      {view === 'profile' && <ProfileView />}
-      {view === 'settings' && <SettingsView />}
+      {view === 'profile' && <ProfileView currentUser={currentUser} onLogout={onLogout} />}
+      {view === 'settings' && <SettingsView currentUser={currentUser} />}
       {view === 'leaderboard' && <LeaderboardView />}
     </div>
   );

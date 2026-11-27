@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { saveLocalAttempt } from '../../lib/localStore';
+import { recordAttempt } from '../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -432,13 +432,14 @@ export const MockTestArena: React.FC<MockTestArenaProps> = ({ onBackHome }) => {
       if (answers[i + 1] === q.correctIndex) row.correct += 1;
     });
     const total = Math.max(examQuestions.length, examStats.answeredCount);
-    saveLocalAttempt({
-      totalQuestions: total,
+    void recordAttempt({
+      mode: instantFeedbackMode ? 'practice' : 'mock',
+      total,
       correct: examStats.correctCount,
       wrong: examStats.wrongCount,
-      unanswered: Math.max(0, total - examStats.answeredCount),
+      skipped: Math.max(0, total - examStats.answeredCount),
       score: examStats.netScore,
-      durationSec: BCS_PRELIM_DURATION_SECONDS - remainingSeconds,
+      duration_sec: BCS_PRELIM_DURATION_SECONDS - remainingSeconds,
       subjects
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps

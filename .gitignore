@@ -1,14 +1,27 @@
+# Dependencies & Build Outputs
 node_modules
 dist
+dist-ssr
+*.local
+
+# Android / Capacitor build artifacts & private signing keys
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+deploy/.keys
+deploy/logs
+*.jks
+*.keystore
+*.apk
+*.idsig
+
+# Env & Editor
+.env
+.env.*
+!.env.example
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
 *.log
-android/.gradle
-android/app/build
-android/build
-.gradle
-
-# deploy secrets (never commit)
-deploy/.keys/
-deploy/secrets.env
-*.apk
-deploy/logs/
