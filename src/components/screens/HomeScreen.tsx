@@ -164,7 +164,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = React.memo(({ onOpen }) => 
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2">
               <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-gradient-to-r from-amber-500/25 via-yellow-400/20 to-violet-500/20 border border-amber-400/60 text-amber-900 dark:text-amber-200 font-royal font-bold text-[10px] sm:text-[11px] tracking-[0.15em] uppercase shadow-sm">
                 <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />
-                <span>Royal Citadel • OKZ Topic Engine</span>
+                <span>Royal Citadel • OZ Topic Engine</span>
               </span>
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-800 dark:text-emerald-200 font-rounded font-bold text-[10px] sm:text-[11px]">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />

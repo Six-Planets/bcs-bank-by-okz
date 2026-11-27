@@ -36,10 +36,17 @@ export function App() {
 
   useEffect(() => {
     const unsub = subscribeUser(setCurrentUser);
-    void consumeAuthRedirectHash().then((kind) => {
-      if (kind === 'recovery') navigate('settings');
-    });
-    return unsub;
+    const checkHash = () => {
+      void consumeAuthRedirectHash().then((kind) => {
+        if (kind === 'recovery') navigate('settings');
+      });
+    };
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => {
+      unsub();
+      window.removeEventListener('hashchange', checkHash);
+    };
   }, []);
 
   useEffect(() => {
@@ -115,7 +122,7 @@ export function App() {
         <Suspense
           fallback={
             <div className="min-h-[60vh] flex items-center justify-center font-rounded font-bold text-sm theme-text-secondary">
-              Loading BCS Bank by OKZ...
+              Loading OZ&apos;s BCS Bank...
             </div>
           }
         >
@@ -142,7 +149,7 @@ export function App() {
           isHome ? 'pb-24 sm:pb-28 -mt-20 sm:-mt-24 pointer-events-none' : 'pb-5 pt-1'
         }`}
       >
-        BCS Bank by OKZ {APP_VERSION_LABEL} · Obaidul Kader Zihad
+        OZ&apos;s BCS Bank {APP_VERSION_LABEL} · Obide Zihad
       </footer>
 
       {isHome && (

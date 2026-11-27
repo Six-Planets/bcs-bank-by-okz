@@ -19,7 +19,7 @@ try {
 
 const config: CapacitorConfig = {
   appId: 'com.bbbokz.app',
-  appName: 'BCS Bank by OKZ',
+  appName: "OZ's BCS Bank",
   webDir: 'dist',
   backgroundColor: '#070614',
   appendUserAgent: `BBBOKZApp/${nativeCode}`,

@@ -285,7 +285,7 @@ export const ProfileView: React.FC<{ currentUser?: AuthUser | null; onLogout?: (
   onLogout
 }) => {
   const { data } = useLoad<Stats>(getStats);
-  const [name, setName] = useState(currentUser?.displayName || 'Obaidul Kader Zihad');
+  const [name, setName] = useState(currentUser?.displayName || 'Obide Zihad');
   const [targetBcs, setTargetBcs] = useState('51st BCS Cadre');
   const [saved, setSaved] = useState(false);
 
@@ -730,7 +730,7 @@ export const SettingsView: React.FC<{ currentUser?: AuthUser | null }> = ({ curr
                 App Version &amp; Build
               </p>
               <p className="font-rounded text-xs theme-text-muted">
-                BCS Bank by OKZ {APP_VERSION_LABEL}
+                OZ&apos;s BCS Bank {APP_VERSION_LABEL}
                 {apkBuild !== null ? ` · Android APK Shell #${apkBuild}` : ' · Web App'}
               </p>
             </div>

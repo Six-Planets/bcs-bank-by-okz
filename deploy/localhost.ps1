@@ -20,7 +20,7 @@ function Alive {
   try { $r = Invoke-WebRequest $Url -UseBasicParsing -TimeoutSec 2; return ($r.StatusCode -eq 200 -and $r.Content -match 'BCS Bank') } catch { return $false }
 }
 
-Write-Host "`n  BCS Bank by OKZ - Localhost" -ForegroundColor Magenta
+Write-Host "`n  OZ's BCS Bank - Localhost" -ForegroundColor Magenta
 
 # 1. Already running? open instantly
 if (Alive) { Ok "Already running"; Start-Process $Url; Ok "Opened $Url"; exit 0 }

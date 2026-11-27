@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ArrowRight,
   CheckCircle2,
@@ -20,7 +20,6 @@ import {
   getClientAuthConfig,
   launchGoogleOAuth,
   loginWithCredentials,
-  loginWithGoogleIdToken,
   registerAccount,
   resendSignupCode,
   sendPasswordReset,
@@ -36,79 +35,6 @@ interface LoginScreenProps {
 
 type AuthMode = 'signin' | 'signup' | 'verify-signup' | 'reset-request' | 'reset-verify';
 
-interface GoogleCredentialResponse {
-  credential?: string;
-}
-
-interface GoogleAccountsId {
-  initialize: (config: {
-    client_id: string;
-    callback: (response: GoogleCredentialResponse) => void;
-    nonce?: string;
-    context?: 'signin' | 'signup' | 'use';
-    auto_select?: boolean;
-    itp_support?: boolean;
-    use_fedcm_for_prompt?: boolean;
-  }) => void;
-  renderButton: (
-    parent: HTMLElement,
-    options: {
-      type?: 'standard' | 'icon';
-      theme?: 'outline' | 'filled_blue' | 'filled_black';
-      size?: 'large' | 'medium' | 'small';
-      text?: 'signin_with' | 'signup_with' | 'continue_with';
-      shape?: 'rectangular' | 'pill';
-      width?: number;
-    }
-  ) => void;
-  prompt: () => void;
-  cancel: () => void;
-}
-
-declare global {
-  interface Window {
-    google?: {
-      accounts?: {
-        id?: GoogleAccountsId;
-      };
-    };
-  }
-}
-
-async function generateNoncePair(): Promise<{ raw: string; hashed: string }> {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  const raw = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-  if (crypto.subtle) {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(raw));
-    const hashed = Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
-    return { raw, hashed };
-  }
-  return { raw, hashed: raw };
-}
-
-function loadGoogleIdentityScript(): Promise<boolean> {
-  if (typeof window === 'undefined') return Promise.resolve(false);
-  if (window.google?.accounts?.id) return Promise.resolve(true);
-  const existing = document.querySelector<HTMLScriptElement>('script[data-gis-script="true"]');
-  if (existing) {
-    return new Promise((resolve) => {
-      existing.addEventListener('load', () => resolve(Boolean(window.google?.accounts?.id)), { once: true });
-      existing.addEventListener('error', () => resolve(false), { once: true });
-    });
-  }
-  return new Promise((resolve) => {
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.defer = true;
-    s.dataset.gisScript = 'true';
-    s.onload = () => resolve(Boolean(window.google?.accounts?.id));
-    s.onerror = () => resolve(false);
-    document.head.appendChild(s);
-  });
-}
-
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [name, setName] = useState('');
@@ -118,96 +44,35 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [otpCode, setOtpCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
   const [resending, setResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [authCfg, setAuthCfg] = useState<AuthServerSettings>({
-    cloudReady: false,
-    google: false,
+    cloudReady: true,
+    google: true,
     email: true,
     mailerAutoconfirm: true,
     googleClientId: ''
   });
-  const [gisReady, setGisReady] = useState(false);
-
-  const googleBtnRef = useRef<HTMLDivElement | null>(null);
-  const onLoginSuccessRef = useRef(onLoginSuccess);
-  onLoginSuccessRef.current = onLoginSuccess;
 
   useEffect(() => {
     void getClientAuthConfig().then(setAuthCfg);
-  }, []);
-
-  // Initialize Google 1-Tap Sign-In when Google Client ID + Supabase are connected
-  useEffect(() => {
-    const isAuthTab = mode === 'signin' || mode === 'signup';
-    if (!isAuthTab || !authCfg.cloudReady || !authCfg.google || !authCfg.googleClientId) {
-      setGisReady(false);
-      return;
+    // Surface any OAuth error returned in URL hash/query cleanly instead of failing silently
+    if (typeof window !== 'undefined') {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      const queryParams = new URLSearchParams(window.location.search);
+      const errMsg =
+        hashParams.get('error_description') ||
+        queryParams.get('error_description') ||
+        hashParams.get('error') ||
+        queryParams.get('error');
+      if (errMsg) {
+        setError(decodeURIComponent(errMsg.replace(/\+/g, ' ')));
+        window.history.replaceState(null, '', window.location.pathname + '#/');
+      }
     }
-
-    let cancelled = false;
-    void (async () => {
-      const loaded = await loadGoogleIdentityScript();
-      if (cancelled || !loaded || !window.google?.accounts?.id) return;
-
-      const noncePair = await generateNoncePair();
-      if (cancelled) return;
-
-      const gis = window.google.accounts.id;
-      gis.initialize({
-        client_id: authCfg.googleClientId,
-        nonce: noncePair.hashed,
-        context: mode === 'signup' ? 'signup' : 'signin',
-        auto_select: false,
-        itp_support: true,
-        use_fedcm_for_prompt: true,
-        callback: async (response: GoogleCredentialResponse) => {
-          if (!response.credential) {
-            setError('Google sign-in did not return a credential. Please try again.');
-            return;
-          }
-          setBusy(true);
-          setError(null);
-          const res = await loginWithGoogleIdToken(response.credential, noncePair.raw);
-          setBusy(false);
-          if (!res.ok) {
-            setError(res.error);
-            return;
-          }
-          onLoginSuccessRef.current(res.user);
-        }
-      });
-
-      if (googleBtnRef.current) {
-        googleBtnRef.current.innerHTML = '';
-        gis.renderButton(googleBtnRef.current, {
-          type: 'standard',
-          theme: document.documentElement.classList.contains('dark') ? 'filled_black' : 'outline',
-          size: 'large',
-          text: mode === 'signup' ? 'signup_with' : 'continue_with',
-          shape: 'pill',
-          width: Math.min(360, Math.max(240, googleBtnRef.current.offsetWidth || 320))
-        });
-      }
-
-      setGisReady(true);
-      try {
-        gis.prompt();
-      } catch {
-        /* ignore suppressed One Tap */
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      try {
-        window.google?.accounts?.id?.cancel();
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [authCfg.cloudReady, authCfg.google, authCfg.googleClientId, mode]);
+  }, []);
 
   const switchMode = (next: AuthMode) => {
     setMode(next);
@@ -288,14 +153,22 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setNotice('A fresh verification code has been sent to your email.');
   };
 
-  const handleGoogleFallbackClick = () => {
-    if (!authCfg.cloudReady || !authCfg.google) {
+  const handleGoogleSignIn = async () => {
+    if (busy || googleBusy) return;
+    setError(null);
+    setNotice(null);
+    setGoogleBusy(true);
+    const cfg = await getClientAuthConfig();
+    if (!cfg.cloudReady || !cfg.google) {
+      setGoogleBusy(false);
       setError(
-        'Google Sign-In activates automatically once Supabase + Google OAuth keys are added in Vercel. Use "Continue as Guest Scholar" below right now!'
+        'Google Sign-In is temporarily unavailable. Please sign in with email or tap "Continue as Guest Scholar" below.'
       );
       return;
     }
+    // Uses direct Supabase top-level OAuth redirect (no fragile GIS iframe / no gsi/transform blank white page!)
     launchGoogleOAuth();
+    window.setTimeout(() => setGoogleBusy(false), 6000);
   };
 
   const isMainTab = mode === 'signin' || mode === 'signup';
@@ -321,15 +194,15 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
           <div>
             <h1 className="text-2xl sm:text-3xl font-royal font-extrabold bg-gradient-to-r from-amber-600 via-yellow-500 to-violet-700 dark:from-amber-200 dark:via-yellow-300 dark:to-amber-100 bg-clip-text text-transparent">
-              BCS Bank by OKZ
+              OZ&apos;s BCS Bank
             </h1>
             <p className="text-[11px] font-rounded font-bold text-amber-700 dark:text-amber-300 tracking-wide">
-              by Obaidul Kader Zihad • Royal Topic Master
+              by Obide Zihad • Royal Topic Master
             </p>
           </div>
 
           <p className="text-xs sm:text-sm font-rounded theme-text-secondary">
-            {mode === 'signin' && 'One-tap Google sign-in, email account, or instant scholar access'}
+            {mode === 'signin' && 'Sign in with Google, email account, or instant scholar access'}
             {mode === 'signup' && 'Create your free cloud-synced account'}
             {mode === 'verify-signup' && 'Verify your email with the 6-digit code'}
             {mode === 'reset-request' && 'Enter your email to receive a 6-digit reset code'}
@@ -365,35 +238,41 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           </div>
         )}
 
-        {/* Priority #1: 1-Tap Google Sign-In */}
+        {/* Priority #1: Posh Native Royal Crystal Google Sign-In Button (Zero Ugly White Iframe!) */}
         {isMainTab && (
           <div className="space-y-3">
             <div className="flex items-center justify-center gap-1.5 text-[11px] font-rounded font-bold text-amber-700 dark:text-amber-300">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Fastest: 1-Tap with your Gmail</span>
+              <span>Fastest: Continue with Gmail</span>
             </div>
 
-            <div
-              ref={googleBtnRef}
-              className={gisReady ? 'flex justify-center min-h-[44px]' : 'hidden'}
-            />
-
-            {!gisReady && (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={handleGoogleFallbackClick}
-                className="w-full py-3 px-4 rounded-2xl bg-white/95 dark:bg-slate-900/85 border border-slate-300/80 dark:border-slate-700/80 font-rounded font-bold text-sm theme-text-primary shadow-sm hover:scale-[1.01] active:scale-[0.99] transition-transform cursor-pointer flex items-center justify-center gap-2.5 disabled:opacity-60"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z" />
-                  <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z" />
-                  <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z" />
-                  <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z" />
-                </svg>
-                <span>{mode === 'signup' ? '1-Tap Sign Up with Google' : 'Continue with Google'}</span>
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={busy || googleBusy || !authCfg.google}
+              onClick={() => void handleGoogleSignIn()}
+              className="group relative w-full py-3 px-4 rounded-2xl bg-white/92 dark:bg-slate-950/75 border border-amber-400/45 dark:border-amber-300/35 hover:border-amber-400 shadow-[0_10px_28px_-10px_rgba(245,158,11,0.35)] hover:shadow-[0_14px_32px_-8px_rgba(245,158,11,0.48)] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-wait overflow-hidden"
+            >
+              <span className="w-7 h-7 rounded-full bg-white shadow-sm flex items-center justify-center shrink-0">
+                {googleBusy ? (
+                  <Loader2 className="w-4 h-4 text-amber-600 animate-spin" />
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z" />
+                    <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.11-6.72-4.96H1.29v3.14C3.26 21.3 7.31 24 12 24Z" />
+                    <path fill="#FBBC05" d="M5.28 14.24c-.24-.72-.38-1.49-.38-2.24s.14-1.52.38-2.24V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.99-3.14Z" />
+                    <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.99 3.14c.95-2.85 3.6-4.96 6.72-4.96Z" />
+                  </svg>
+                )}
+              </span>
+              <span className="font-rounded font-bold text-sm theme-text-primary tracking-wide">
+                {googleBusy
+                  ? 'Opening Google Sign-In…'
+                  : mode === 'signup'
+                  ? 'Sign Up with Google'
+                  : 'Continue with Google'}
+              </span>
+              <ArrowRight className="w-4 h-4 text-amber-500 group-hover:translate-x-0.5 transition-transform" />
+            </button>
 
             <div className="relative flex items-center justify-center pt-0.5">
               <div className="border-t border-slate-300/60 dark:border-slate-700/70 w-full" />
@@ -420,7 +299,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
                   autoComplete="name"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Obaidul Kader Zihad"
+                  placeholder="e.g. Obide Zihad"
                   maxLength={60}
                   className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white/80 dark:bg-slate-900/75 border border-slate-300/70 dark:border-slate-700/80 font-rounded text-sm theme-text-primary focus:outline-none focus:ring-2 focus:ring-amber-400"
                   required
@@ -604,7 +483,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           )}
         </form>
 
-        {/* Instant Local Guest Scholar Access (always works even offline or before cloud setup) */}
+        {/* Instant Local Guest Scholar Access */}
         {isMainTab && (
           <button
             type="button"
@@ -617,7 +496,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
 
         {/* Small-Font Version & Build Number on Login Page */}
         <p className="text-center text-[10px] font-rounded tracking-wide theme-text-muted/85 pt-0.5 select-none">
-          BCS Bank by OKZ {APP_VERSION_LABEL} · Obaidul Kader Zihad
+          OZ&apos;s BCS Bank {APP_VERSION_LABEL} · Obide Zihad
         </p>
       </div>
     </div>

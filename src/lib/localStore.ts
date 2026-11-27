@@ -41,10 +41,10 @@ function createClientId(): string {
 }
 
 const DEFAULT_CANDIDATE: LocalCandidate = {
-  id: 'okz-local-candidate',
-  displayName: 'Obaidul Kader Zihad',
+  id: 'oz-local-candidate',
+  displayName: 'Obide Zihad',
   targetBcs: '51st BCS Cadre',
-  bio: 'Data-driven BCS Preliminary Scholar • BBBOKZ',
+  bio: "Data-driven BCS Preliminary Scholar • OZ's BCS Bank",
   joinedAt: '2026-11-27'
 };
 

@@ -102,7 +102,7 @@ export function getSession(): Session | null {
 /** Local Guest Scholar session (works offline or before Supabase keys are wired). */
 export function startGuestSession(customName?: string): Session {
   const local = getCandidateProfile();
-  const displayName = (customName || local.displayName || 'Obaidul Kader Zihad').trim();
+  const displayName = (customName || local.displayName || 'Obide Zihad').trim();
   saveCandidateProfile({ displayName });
   const guest: Session = {
     access_token: 'local-guest-token',
@@ -111,7 +111,7 @@ export function startGuestSession(customName?: string): Session {
     isGuest: true,
     user: {
       id: local.id,
-      email: 'guest@bbbokz.local',
+      email: 'guest@ozbcsbank.local',
       user_metadata: { display_name: displayName }
     }
   };
@@ -398,9 +398,14 @@ export async function getAuthSettings(): Promise<AuthServerSettings> {
 }
 
 export function getGoogleOAuthUrl(): string {
-  const redirectTo =
-    typeof window !== 'undefined' ? window.location.origin + window.location.pathname : '';
-  return `${runtimeSupabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}`;
+  const isAndroidApk =
+    typeof navigator !== 'undefined' && /BBBOKZApp\/\d+|OZBcsBankApp\/\d+/.test(navigator.userAgent);
+  const redirectTo = isAndroidApk
+    ? 'ozbcsbank://auth-callback'
+    : typeof window !== 'undefined'
+    ? window.location.origin + window.location.pathname
+    : '';
+  return `${runtimeSupabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectTo)}&prompt=select_account`;
 }
 
 export async function consumeAuthRedirectHash(): Promise<'recovery' | 'oauth' | null> {

@@ -869,7 +869,7 @@ export const TopicMasterView: React.FC = () => {
           <div className="flex flex-wrap items-center justify-center lg:justify-start gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-violet-500/20 border border-amber-400/50 text-amber-800 dark:text-amber-200 font-royal font-bold text-[10px] sm:text-[11px] tracking-[0.12em] uppercase">
               <Crown className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />
-              <span>Royal Topic Master • OKZ Data Intelligence</span>
+              <span>Royal Topic Master • OZ Data Intelligence</span>
             </span>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-800 dark:text-emerald-200 font-rounded font-bold text-[11px]">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

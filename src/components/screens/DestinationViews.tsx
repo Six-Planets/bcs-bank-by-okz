@@ -102,7 +102,7 @@ export const DestinationView: React.FC<DestinationViewProps> = ({
             <ConservatoryTome3DEmblem className="w-28 h-28 sm:w-32 sm:h-32 shrink-0 animate-float-gentle drop-shadow-[0_14px_24px_rgba(16,185,129,0.32)]" />
             <div className="text-center sm:text-left space-y-2">
               <span className="inline-block px-3 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-800 dark:text-emerald-200 font-rounded font-bold text-xs">
-                BBBOKZ Revision Vault
+                OZ&apos;s BCS Bank Revision Vault
               </span>
               <h1 className="text-2xl sm:text-3xl font-rounded font-bold theme-text-primary">
                 Study Materials
@@ -191,7 +191,7 @@ export const DestinationView: React.FC<DestinationViewProps> = ({
                 date: '২০২৬'
               },
               {
-                badge: 'OKZ Analytics',
+                badge: 'OZ Analytics',
                 title: '১০ম–৫০তম বিসিএস (৫,৬৫৫ প্রশ্ন) সম্পূর্ণ ডেটাসেট ও ৮৯টি অফিশিয়াল সিলেবাস ইউনিট যুক্ত হয়েছে',
                 date: 'Live Now'
               }

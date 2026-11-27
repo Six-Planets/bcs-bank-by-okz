@@ -114,7 +114,7 @@ if ($doApk) {
 
 $sw.Stop()
 Write-Host "`n================================================================" -ForegroundColor Green
-Write-Host "  ALL DONE in $([int]$sw.Elapsed.TotalSeconds)s  -  BCS Bank by OKZ v$Version" -ForegroundColor Green
+Write-Host "  ALL DONE in $([int]$sw.Elapsed.TotalSeconds)s  -  OZ's BCS Bank v$Version" -ForegroundColor Green
 Write-Host "  Website : $LiveUrl" -ForegroundColor Green
 Write-Host "  Mirror  : https://six-planets.github.io/bcs-bank-by-okz/" -ForegroundColor Green
 if ($doApk) { Write-Host "  APK     : https://github.com/$Repo/releases/latest/download/$ApkName" -ForegroundColor Green }

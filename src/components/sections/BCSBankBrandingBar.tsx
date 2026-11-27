@@ -21,7 +21,7 @@ const BrandingBarBase: React.FC = () => {
 
   return (
     <section
-      aria-label="BCS Bank by OKZ Command Bridge and Theme Switch"
+      aria-label="OZ's BCS Bank Command Bridge and Theme Switch"
       className="relative rounded-[1.5rem] sm:rounded-[1.9rem] section-card-branding px-3.5 py-2.5 sm:px-6 sm:py-3 overflow-hidden select-none"
     >
       {/* Subtle Royal Gold & Emerald Horizon Glows */}
@@ -39,18 +39,15 @@ const BrandingBarBase: React.FC = () => {
 
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5 min-w-0">
             <span className="font-royal font-extrabold text-sm sm:text-xl lg:text-2xl tracking-[0.06em] bg-gradient-to-r from-amber-600 via-amber-500 to-indigo-700 dark:from-amber-200 dark:via-yellow-300 dark:to-amber-100 bg-clip-text text-transparent drop-shadow-sm whitespace-nowrap">
-              BCS BANK
+              OZ&apos;s BCS BANK
             </span>
 
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-gradient-to-r from-amber-500/15 via-violet-500/12 to-emerald-500/15 border border-amber-400/45 dark:border-amber-300/35 shrink-0">
               <span className="text-[10px] font-rounded font-semibold theme-text-muted">by</span>
-              <span className="font-royal font-extrabold text-[11px] sm:text-xs bg-gradient-to-r from-amber-600 to-violet-700 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent tracking-widest">
-                OKZ
+              <span className="font-royal font-extrabold text-[11px] sm:text-xs bg-gradient-to-r from-amber-600 to-violet-700 dark:from-amber-300 dark:to-yellow-200 bg-clip-text text-transparent tracking-wider">
+                Obide Zihad
               </span>
-              <span className="hidden lg:inline-flex items-center gap-1 pl-1.5 border-l border-amber-500/30 text-[10px] font-rounded font-semibold theme-text-secondary">
-                <Sparkles className="w-2.5 h-2.5 text-amber-500" />
-                <span>Obaidul Kader Zihad</span>
-              </span>
+              <Sparkles className="hidden sm:inline w-2.5 h-2.5 text-amber-500" />
             </div>
           </div>
         </div>

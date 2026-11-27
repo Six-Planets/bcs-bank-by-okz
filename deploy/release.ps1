@@ -13,7 +13,7 @@ param(
 )
 
 $ErrorActionPreference = 'Continue'
-$AppName = 'BCS Bank by OKZ'
+$AppName = "OZ's BCS Bank"
 $ApkName = 'BCS-Bank-by-OKZ.apk'
 $Repo    = 'Six-Planets/bcs-bank-by-okz'
 $Root    = Split-Path $PSScriptRoot -Parent
@@ -204,7 +204,7 @@ if ($Apk) {
   if ($LASTEXITCODE -eq 0) {
     gh release upload $tag $apkPath --repo $Repo --clobber
   } else {
-    gh release create $tag $apkPath --repo $Repo --title "BCS Bank by OKZ v$Version (Build $NextBuild)" --notes "Automated signed Android APK release for BCS Bank by OKZ (BBBOKZ) v$Version (Build $NextBuild). Existing installed APKs will detect this update in-app automatically."
+    gh release create $tag $apkPath --repo $Repo --title "OZ's BCS Bank v$Version (Build $NextBuild)" --notes "Automated signed Android APK release for OZ's BCS Bank (by Obide Zihad) v$Version (Build $NextBuild). Existing installed APKs will detect this update in-app automatically."
   }
   if ($LASTEXITCODE -ne 0) { Fail "GitHub Release APK upload failed" }
   Ok "APK live at: https://github.com/$Repo/releases/latest/download/$ApkName"

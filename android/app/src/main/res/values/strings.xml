@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">BCS Bank by OKZ</string>
-    <string name="title_activity_main">BCS Bank by OKZ</string>
+    <string name="app_name">OZ\'s BCS Bank</string>
+    <string name="title_activity_main">OZ\'s BCS Bank</string>
     <string name="package_name">com.bbbokz.app</string>
-    <string name="custom_url_scheme">com.bbbokz.app</string>
+    <string name="custom_url_scheme">ozbcsbank</string>
 </resources>
