@@ -1,5 +1,5 @@
 {
-  "supabaseUrl": "",
-  "supabaseAnonKey": "",
-  "googleClientId": ""
+  "supabaseUrl": "https://kjnflillaxwlgsovqaba.supabase.co",
+  "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqbmZsaWxsYXh3bGdzb3ZxYWJhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU3NTg0NDIsImV4cCI6MjExMTMzNDQ0Mn0.B-Yy2BpR3UtEXfrtDPyAQwO8AjEGPLExXoQdTa862a0",
+  "googleClientId": "1078991019940-0secgpp7iiks4fs0t59nqmv6hke6hb8t.apps.googleusercontent.com"
 }

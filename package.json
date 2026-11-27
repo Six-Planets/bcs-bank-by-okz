@@ -1,7 +1,7 @@
 {
   "name": "bcs-bank-by-okz",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "BCS Bank by OKZ (BBBOKZ) — Royal Topic Master Intelligence & 10th–50th BCS Preliminary Archive by Obaidul Kader Zihad",
   "type": "module",
   "scripts": {

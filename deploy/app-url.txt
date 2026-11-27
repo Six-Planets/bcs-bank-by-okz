@@ -1,1 +1,1 @@
-https://six-planets.github.io/bcs-bank-by-okz/
+https://bcs-bank-by-okz.vercel.app/

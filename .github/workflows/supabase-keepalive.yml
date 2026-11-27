@@ -5,21 +5,36 @@ on:
     # Runs every 4 days so Supabase Free Tier never auto-pauses after 7 days of inactivity
     - cron: '0 6 */4 * *'
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'public/auth-config.json'
+      - '.github/workflows/supabase-keepalive.yml'
 
 jobs:
   ping-supabase:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: public/auth-config.json
+          sparse-checkout-cone-mode: false
+
       - name: Ping Supabase REST Health Endpoint
         env:
-          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Secrets are optional overrides; by default the public, client-safe
+          # values from public/auth-config.json are used (anon key only).
+          SECRET_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SECRET_ANON: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
+          SUPABASE_URL="${SECRET_URL:-$(jq -r '.supabaseUrl // empty' public/auth-config.json)}"
+          SUPABASE_ANON_KEY="${SECRET_ANON:-$(jq -r '.supabaseAnonKey // empty' public/auth-config.json)}"
           if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
-            echo "Supabase secrets not configured yet — skipping ping cleanly."
+            echo "Supabase not configured yet — skipping ping cleanly."
             exit 0
           fi
           curl -fsS "${SUPABASE_URL%/}/rest/v1/health_ping?select=*" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}"
+          echo
           echo "Supabase Free Tier DB is awake!"
