@@ -1,0 +1,14 @@
+node_modules
+dist
+.DS_Store
+*.log
+android/.gradle
+android/app/build
+android/build
+.gradle
+
+# deploy secrets (never commit)
+deploy/.keys/
+deploy/secrets.env
+*.apk
+deploy/logs/
