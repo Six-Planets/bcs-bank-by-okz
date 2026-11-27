@@ -16,15 +16,19 @@ const ENV_GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | 
 let runtimeSupabaseUrl = ENV_SUPABASE_URL;
 let runtimeSupabaseAnon = ENV_SUPABASE_ANON;
 let runtimeGoogleClientId = ENV_GOOGLE_CLIENT_ID;
-let configLoaded = false;
+let configPromise: Promise<void> | null = null;
 
 export function isCloudAuthConfigured(): boolean {
   return Boolean(runtimeSupabaseUrl && runtimeSupabaseAnon);
 }
 
-async function ensureRuntimeConfig(): Promise<void> {
-  if (configLoaded) return;
-  configLoaded = true;
+function ensureRuntimeConfig(): Promise<void> {
+  // Share one in-flight load so every caller waits for auth-config.json.
+  configPromise ??= loadRuntimeConfig();
+  return configPromise;
+}
+
+async function loadRuntimeConfig(): Promise<void> {
   if (runtimeSupabaseUrl && runtimeSupabaseAnon && runtimeGoogleClientId) return;
   try {
     const res = await fetch(`./auth-config.json?t=${Date.now()}`, { cache: 'no-store' });
