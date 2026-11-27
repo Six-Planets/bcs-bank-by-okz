@@ -32,9 +32,15 @@ export default defineConfig({
       }
     }
   },
+  optimizeDeps: {
+    entries: ['index.html']
+  },
   server: {
     port: 5174,
     host: true,
-    allowedHosts: true
+    allowedHosts: true,
+    watch: {
+      ignored: ['**/android/**', '**/deploy/**', '**/dist/**']
+    }
   }
 });

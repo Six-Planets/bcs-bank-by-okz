@@ -1,7 +1,7 @@
 ﻿<#
   BCS BANK BY OKZ (BBBOKZ) — ONE-CLICK BEGINNER-PROOF RELEASE ENGINE
   ------------------------------------------------------------------
-  Usage (or just double-click 2-DEPLOY-UPDATE.bat / 3-DEPLOY-WITH-APK.bat):
+  Usage (or just double-click "BCS Bank by OKZ - Deploy.bat"):
     .\deploy\release.ps1          -> Auto-bump version & build, build web, update version.json, push to GitHub (auto-deploys Vercel + GitHub Pages).
     .\deploy\release.ps1 -Apk     -> Same + builds a signed BCS-Bank-by-OKZ.apk and uploads it to GitHub Releases so old APKs self-update in-app!
     .\deploy\release.ps1 -NoBump  -> Redeploy current version without incrementing version number.
@@ -189,6 +189,8 @@ git config http.version HTTP/1.1
 git add -A
 $commitMsg = if ($Message) { "Release v$Version (Build $NextBuild) - $Message" } else { "Release v$Version (Build $NextBuild)" }
 git commit -m $commitMsg
+git pull --rebase --autostash origin main
+if ($LASTEXITCODE -ne 0) { git rebase --abort 2>$null; Fail "git pull --rebase failed (conflict with GitHub)" }
 git push origin main
 if ($LASTEXITCODE -ne 0) { Fail "git push failed" }
 Ok "Pushed v$Version (Build $NextBuild) to $Repo"
